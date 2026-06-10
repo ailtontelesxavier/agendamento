@@ -118,7 +118,7 @@ curl -X POST http://localhost:8000/auth/register \
 ### Criar usuário via CLI
 
 ```bash
-poetry run medcare-create-user \
+python medcare/cli/create_user.py \
   --cpf 12345678901 \
   --email admin@medcare.local \
   --superuser \
