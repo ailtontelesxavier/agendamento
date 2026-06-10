@@ -115,6 +115,19 @@ curl -X POST http://localhost:8000/auth/register \
   -d '{"cpf": "12345678901", "password": "senha123"}'
 ```
 
+### Criar usuário via CLI
+
+```bash
+poetry run medcare-create-user \
+  --cpf 12345678901 \
+  --email admin@medcare.local \
+  --superuser \
+  --verified
+```
+
+Se a senha não for enviada por `--password`, o comando solicita no terminal.
+Use `--create-tables` apenas em ambiente local quando as migrations ainda não foram executadas.
+
 ## Endpoints
 
 ### Públicos
