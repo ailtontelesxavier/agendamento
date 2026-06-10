@@ -1,0 +1,28 @@
+[project]
+name = "medcare-agendamento-backend"
+version = "0.1.0"
+description = "Backend FastAPI para agendamento MedCare com arquitetura hexagonal."
+readme = "READMIN.md"
+requires-python = ">=3.11,<4.0"
+authors = [{ name = "MedCare", email = "dev@medcare.local" }]
+dependencies = [
+    "fastapi>=0.115.0,<0.116.0",
+    "uvicorn[standard]>=0.30.0,<0.31.0",
+    "pydantic>=2.7.0,<3.0.0",
+]
+
+[tool.poetry]
+packages = [{ include = "medcare" }]
+
+[tool.poetry.group.dev.dependencies]
+httpx = "^0.27.0"
+pytest = "^8.2.0"
+poetry-plugin-shell = "^1.0.1"
+
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -1,0 +1,153 @@
+x-service-dns: &service-dns
+  - 8.8.8.8
+  - 1.1.1.1
+
+services:
+  app-frontend:
+    container_name: app-frontend
+    dns: *service-dns
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+#    ports:
+#      - "8002:80"
+    volumes:
+      - ./nginx/html:/usr/share/nginx/html
+    networks:
+      backend2:
+        ipv4_address: 172.20.0.4
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+  
+  app-backend:
+    container_name: app-backend
+    dns: *service-dns
+    entrypoint: ./entrypoint.sh
+    build:
+      context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL:-}
+    restart: always
+    ports:
+      - "8004:8004"
+    #depends_on:
+    #  - database
+    networks:
+      backend2:
+        ipv4_address: 172.20.0.2
+    volumes:
+      #- .:/app
+      #- ./certs/cert.pem:/etc/ssl/certs/cert.pem
+      #- ./certs/key.pem:/etc/ssl/private/key.pem 
+      - uploads:/app/uploads
+      - ./app/static:/app/static
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      TZ: America/Sao_Paulo
+      ENV: production #production ou development
+      LOG_LEVEL: WARNING
+      UVICORN_CMD: uvicorn
+      WORKERS: 5
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES} 
+      ISS: ${ISS}
+      AUD: ${AUD}
+      NAME: ${NAME}
+      USER: ${APP_DB_USER:-app_user}
+      PASSWORD: ${PASSWORD}
+      HOST: ${HOST}  # host.docker.internal
+      PORT: ${PORT}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT}
+      OTEL_EXPORTER_OTLP_INSECURE: ${OTEL_EXPORTER_OTLP_INSECURE}
+      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION: ${OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION}
+      OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER}
+      OTEL_METRICS_EXPORTER: ${OTEL_METRICS_EXPORTER}
+      OTEL_LOGS_EXPORTER: ${OTEL_LOGS_EXPORTER}
+
+  redis:
+    image: redis:8.6
+    container_name: redis_cache
+    dns: *service-dns
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    networks:
+      backend2:
+        ipv4_address: 172.20.0.6
+
+  otel:
+    image: grafana/otel-lgtm
+    dns: *service-dns
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+      - 4317:4317
+      - 4318:4318
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GF_SECURITY_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SECURITY_DISABLE_GRAVATAR: "true"
+      GF_SECURITY_COOKIE_SECURE: "false"
+      GF_SECURITY_COOKIE_SAMESITE: "lax"
+    volumes:
+      - grafana_lgtm_data:/data
+      - ./otelcol-config.yaml:/otelcol/config.yaml:ro
+    networks:
+      backend2:
+        ipv4_address: 172.20.0.7
+  
+  nginx2:
+    #user: "1000:1000"
+    dns: *service-dns
+    build: ./nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:rw
+      - ./nginx/boleto.conf:/etc/nginx/conf.d/boleto.conf:rw
+      #- nginx_cache2:/var/cache/nginx
+      - ./nginx/html:/usr/share/nginx/html:ro
+      - ./nginx/ssl:/etc/ssl/fomento:ro
+      - uploads:/app/uploads
+      - ./app/static:/app/static
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    environment:
+      TZ: America/Sao_Paulo
+    depends_on:
+      - app-frontend
+      - app-backend
+    links:
+      - app-frontend
+      - app-backend
+    networks:
+      backend2:
+        ipv4_address: 172.20.0.8
+
+
+networks:
+  backend2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  grafana_lgtm_data:
+  uploads:
+    driver: local
+    driver_opts:
+      type: none
+      device: /var/www/uploads
+      o: bind
