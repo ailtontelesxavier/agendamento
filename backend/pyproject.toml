@@ -20,7 +20,18 @@ name = "medcare-agendamento-backend"
 version = "0.1.0"
 description = "Backend FastAPI para agendamento MedCare com arquitetura hexagonal."
 authors = ["MedCare <dev@medcare.local>"]
+readme = "READMIN.md"
 packages = [{ include = "medcare" }]
+
+[tool.poetry.dependencies]
+python = ">=3.13,<4.0"
+fastapi = ">=0.115.0,<0.116.0"
+uvicorn = { version = ">=0.30.0,<0.31.0", extras = ["standard"] }
+pydantic = ">=2.7.0,<3.0.0"
+sqlalchemy = { version = ">=2.0,<3.0", extras = ["asyncio"] }
+asyncpg = ">=0.30.0,<1.0"
+fastapi-users = { version = ">=14.0,<15.0", extras = ["sqlalchemy"] }
+alembic = ">=1.14,<2.0"
 
 [project.scripts]
 medcare-create-user = "medcare.cli.create_user:main"
