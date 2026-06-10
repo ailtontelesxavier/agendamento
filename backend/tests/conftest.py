@@ -1,7 +1,8 @@
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 import pytest
+import pytest_asyncio
 
 from medcare.adapters import InMemoryAppointmentRepository, InMemorySessionRepository
 from medcare.api import create_app
@@ -34,25 +35,23 @@ def app(appointment_use_cases, whatsapp_use_cases):
     return create_app(appointment_use_cases, whatsapp_use_cases)
 
 
-@pytest.fixture
-def client(app):
-    from fastapi.testclient import TestClient
+@pytest_asyncio.fixture
+async def client(app):
+    from httpx import ASGITransport, AsyncClient
 
-    with TestClient(app) as test_client:
-        yield test_client
-
-
-@contextmanager
-def _mock_model_time(time=datetime(2024, 1, 1)):
-    original_default_factory = Appointment.__dataclass_fields__["created_at"].default_factory
-    Appointment.__dataclass_fields__["created_at"].default_factory = lambda: time
-
-    try:
-        yield time
-    finally:
-        Appointment.__dataclass_fields__["created_at"].default_factory = original_default_factory
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
 
 
 @pytest.fixture
 def mock_model_time():
-    return _mock_model_time
+    @asynccontextmanager
+    async def _mock(time=datetime(2024, 1, 1)):
+        original_default_factory = Appointment.__dataclass_fields__["created_at"].default_factory
+        Appointment.__dataclass_fields__["created_at"].default_factory = lambda: time
+        try:
+            yield time
+        finally:
+            Appointment.__dataclass_fields__["created_at"].default_factory = original_default_factory
+
+    return _mock

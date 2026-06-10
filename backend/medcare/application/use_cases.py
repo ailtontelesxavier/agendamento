@@ -21,26 +21,27 @@ class AppointmentUseCases:
     def specialties(self) -> dict:
         return {"specialties": list(SPECIALTIES.keys()), "doctors": SPECIALTIES}
 
-    def booked_slots(self, doctor: str, date: str) -> list[str]:
+    async def booked_slots(self, doctor: str, date: str) -> list[str]:
+        appointments = await self.appointments.list(date=date, doctor=doctor)
         return [
             appointment.time
-            for appointment in self.appointments.list(date=date, doctor=doctor)
+            for appointment in appointments
             if appointment.status != AppointmentStatus.CANCELLED
         ]
 
-    def available_slots(self, doctor: str, date: str) -> dict:
-        booked = self.booked_slots(doctor, date)
+    async def available_slots(self, doctor: str, date: str) -> dict:
+        booked = await self.booked_slots(doctor, date)
         return {"slots": [slot for slot in SLOTS if slot not in booked], "booked": booked}
 
-    def list_appointments(
+    async def list_appointments(
         self,
         date: str | None = None,
         doctor: str | None = None,
         status: str | None = None,
     ) -> list[Appointment]:
-        return self.appointments.list(date=date, doctor=doctor, status=status)
+        return await self.appointments.list(date=date, doctor=doctor, status=status)
 
-    def create_appointment(
+    async def create_appointment(
         self,
         patient_name: str,
         phone: str,
@@ -51,7 +52,8 @@ class AppointmentUseCases:
         notes: str = "",
         source: AppointmentSource = AppointmentSource.WEB,
     ) -> Appointment:
-        if time in self.booked_slots(doctor, date):
+        booked = await self.booked_slots(doctor, date)
+        if time in booked:
             raise AppointmentAlreadyBooked("Horário já ocupado")
 
         appointment = Appointment(
@@ -65,20 +67,20 @@ class AppointmentUseCases:
             notes=notes,
             source=source,
         )
-        return self.appointments.add(appointment)
+        return await self.appointments.add(appointment)
 
-    def update_status(self, appointment_id: str, status: str) -> Appointment:
-        appointment = self.appointments.get(appointment_id)
+    async def update_status(self, appointment_id: str, status: str) -> Appointment:
+        appointment = await self.appointments.get(appointment_id)
         if not appointment:
             raise AppointmentNotFound("Agendamento não encontrado")
         appointment.status = AppointmentStatus(status)
-        return self.appointments.update(appointment)
+        return await self.appointments.update(appointment)
 
-    def cancel(self, appointment_id: str) -> None:
-        self.update_status(appointment_id, AppointmentStatus.CANCELLED.value)
+    async def cancel(self, appointment_id: str) -> None:
+        await self.update_status(appointment_id, AppointmentStatus.CANCELLED.value)
 
-    def stats(self) -> dict:
-        appointments = self.appointments.list()
+    async def stats(self) -> dict:
+        appointments = await self.appointments.list()
         return {
             "total": len(appointments),
             "confirmed": sum(1 for item in appointments if item.status == AppointmentStatus.CONFIRMED),
@@ -97,24 +99,24 @@ class WhatsAppUseCases:
     def normalize_phone(self, phone: str) -> str:
         return phone.replace("+", "").replace(" ", "").replace("-", "")
 
-    def handle_message(self, phone: str, message: str) -> dict:
+    async def handle_message(self, phone: str, message: str) -> dict:
         phone = self.normalize_phone(phone)
-        session = self.sessions.get(phone) or {"step": "start", "phone": phone}
-        session = self.process_message(phone, message, session)
-        self.sessions.set(phone, session)
+        session = await self.sessions.get(phone) or {"step": "start", "phone": phone}
+        session = await self.process_message(phone, message, session)
+        await self.sessions.set(phone, session)
         return {
             "to": phone,
             "message": self.format_response(session),
             "session_step": session.get("step"),
         }
 
-    def reset(self, phone: str) -> None:
-        self.sessions.delete(phone)
+    async def reset(self, phone: str) -> None:
+        await self.sessions.delete(phone)
 
-    def list_sessions(self) -> dict[str, dict]:
-        return self.sessions.list()
+    async def list_sessions(self) -> dict[str, dict]:
+        return await self.sessions.list()
 
-    def process_message(self, phone: str, message: str, session: dict) -> dict:
+    async def process_message(self, phone: str, message: str, session: dict) -> dict:
         msg = message.strip()
         step = session.get("step", "start")
 
@@ -125,7 +127,7 @@ class WhatsAppUseCases:
             if msg == "1":
                 session["step"] = "choose_specialty"
             elif msg == "2":
-                user_appointments = self.appointments.appointments.list(phone=phone)
+                user_appointments = await self.appointments.appointments.list(phone=phone)
                 session["step"] = "list_appointments"
                 session["user_appointments"] = [item.to_dict() for item in user_appointments]
             else:
@@ -157,6 +159,9 @@ class WhatsAppUseCases:
                 dt = datetime.strptime(msg, "%d/%m/%Y")
                 session["date"] = dt.strftime("%Y-%m-%d")
                 session["date_display"] = msg
+                doctor = session.get("doctor", "")
+                slots_data = await self.appointments.available_slots(doctor, session["date"])
+                session["available_slots"] = slots_data["slots"]
                 session["step"] = "choose_time"
             except ValueError:
                 pass
@@ -164,7 +169,7 @@ class WhatsAppUseCases:
         elif step == "choose_time":
             doctor = session.get("doctor", "")
             date = session.get("date", "")
-            booked = self.appointments.booked_slots(doctor, date)
+            booked = await self.appointments.booked_slots(doctor, date)
             if msg in SLOTS and msg not in booked:
                 session["time"] = msg
                 session["step"] = "get_name"
@@ -175,7 +180,7 @@ class WhatsAppUseCases:
 
         elif step == "confirm":
             if msg.upper() == "SIM":
-                appointment = self.appointments.create_appointment(
+                appointment = await self.appointments.create_appointment(
                     patient_name=session["patient_name"],
                     phone=phone,
                     specialty=session["specialty"],
@@ -197,54 +202,52 @@ class WhatsAppUseCases:
 
         if step == "start":
             return (
-                "👋 Olá! Bem-vindo à *Clínica MedCare*.\n\n"
+                "Olá! Bem-vindo à *Clínica MedCare*.\n\n"
                 "Para agendar sua consulta, responda com o número da opção desejada:\n\n"
-                "1️⃣ Agendar consulta\n"
-                "2️⃣ Ver meus agendamentos\n"
-                "3️⃣ Cancelar consulta\n"
-                "4️⃣ Falar com atendente\n\n"
+                "1 Agendar consulta\n"
+                "2 Ver meus agendamentos\n"
+                "3 Cancelar consulta\n"
+                "4 Falar com atendente\n\n"
                 "_Digite o número da opção:_"
             )
         if step == "choose_specialty":
             specs = list(SPECIALTIES.keys())
-            lines = "\n".join(f"{idx + 1}️⃣ {spec}" for idx, spec in enumerate(specs))
-            return f"🏥 *Escolha a especialidade:*\n\n{lines}\n\n_Digite o número:_"
+            lines = "\n".join(f"{idx + 1} {spec}" for idx, spec in enumerate(specs))
+            return f"*Escolha a especialidade:*\n\n{lines}\n\n_Digite o número:_"
         if step == "choose_doctor":
             spec = session.get("specialty", "")
             docs = SPECIALTIES.get(spec, [])
-            lines = "\n".join(f"{idx + 1}️⃣ {doctor}" for idx, doctor in enumerate(docs))
-            return f"👨‍⚕️ *Médicos disponíveis em {spec}:*\n\n{lines}\n\n_Digite o número:_"
+            lines = "\n".join(f"{idx + 1} {doctor}" for idx, doctor in enumerate(docs))
+            return f"*Médicos disponíveis em {spec}:*\n\n{lines}\n\n_Digite o número:_"
         if step == "choose_date":
-            return "📅 *Qual a data desejada?*\n\nInforme no formato: *DD/MM/AAAA*\n_(ex: 25/06/2025)_"
+            return "*Qual a data desejada?*\n\nInforme no formato: *DD/MM/AAAA*\n_(ex: 25/06/2025)_"
         if step == "choose_time":
-            doctor = session.get("doctor", "")
-            date = session.get("date", "")
-            available = self.appointments.available_slots(doctor, date)["slots"]
+            available = session.get("available_slots", [])
             if not available:
-                return "😕 Não há horários disponíveis nessa data. Tente outra data.\n\nInforme uma nova data (DD/MM/AAAA):"
+                return "Não há horários disponíveis nessa data. Tente outra data.\n\nInforme uma nova data (DD/MM/AAAA):"
             lines = "\n".join(f"• {slot}" for slot in available)
-            return f"🕐 *Horários disponíveis:*\n\n{lines}\n\n_Digite o horário desejado (HH:MM):_"
+            return f"*Horários disponíveis:*\n\n{lines}\n\n_Digite o horário desejado (HH:MM):_"
         if step == "get_name":
-            return "👤 *Qual o seu nome completo?*"
+            return "*Qual o seu nome completo?*"
         if step == "confirm":
             return (
-                f"✅ *Confirme seu agendamento:*\n\n"
-                f"📋 Especialidade: {session.get('specialty')}\n"
-                f"👨‍⚕️ Médico: {session.get('doctor')}\n"
-                f"📅 Data: {session.get('date_display')}\n"
-                f"🕐 Horário: {session.get('time')}\n"
-                f"👤 Paciente: {session.get('patient_name')}\n\n"
+                f"*Confirme seu agendamento:*\n\n"
+                f"Especialidade: {session.get('specialty')}\n"
+                f"Médico: {session.get('doctor')}\n"
+                f"Data: {session.get('date_display')}\n"
+                f"Horário: {session.get('time')}\n"
+                f"Paciente: {session.get('patient_name')}\n\n"
                 "Confirmar? Responda *SIM* ou *NÃO*"
             )
         if step == "done":
             code = session.get("appointment_id", "")[:8].upper()
             return (
-                f"🎉 *Consulta agendada com sucesso!*\n\n"
-                f"📌 Código: *{code}*\n"
-                f"👨‍⚕️ {session.get('doctor')}\n"
-                f"📅 {session.get('date_display')} às {session.get('time')}\n\n"
+                f"*Consulta agendada com sucesso!*\n\n"
+                f"Código: *{code}*\n"
+                f"{session.get('doctor')}\n"
+                f"{session.get('date_display')} às {session.get('time')}\n\n"
                 "Lembre-se de chegar 15 min antes.\n"
-                "Em caso de dúvidas, entre em contato conosco. 🏥"
+                "Em caso de dúvidas, entre em contato conosco."
             )
         if step == "list_appointments":
             appointments = session.get("user_appointments", [])
@@ -254,7 +257,6 @@ class WhatsAppUseCases:
                 f"• {item['date']} às {item['time']} com {item['doctor']} ({item['status']})"
                 for item in appointments
             ]
-            return "📋 *Seus agendamentos:*\n\n" + "\n".join(lines)
+            return "*Seus agendamentos:*\n\n" + "\n".join(lines)
 
         return "Não entendi. Digite *oi* para recomeçar."
-

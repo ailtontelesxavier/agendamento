@@ -1,4 +1,8 @@
-def test_create_app_registers_expected_routes(app):
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_create_app_registers_expected_routes(app):
     paths = {route.path for route in app.routes}
 
     assert "/" in paths

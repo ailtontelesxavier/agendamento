@@ -70,7 +70,7 @@ function createDefaultForm() {
   return { ...DEFAULT_APPOINTMENT_FORM };
 }
 
-export function useMedcareApp() {
+export function useMedcareApp(auth) {
   const view = ref('dashboard');
   const today = getTodayIsoDate();
 
@@ -150,7 +150,7 @@ export function useMedcareApp() {
 
   async function loadStats() {
     try {
-      const response = await fetch(`${API_BASE_URL}/stats`);
+      const response = await auth.authFetch(`${API_BASE_URL}/stats`);
       stats.value = await response.json();
     } catch {
       stats.value = { confirmed: 0, cancelled: 0, completed: 0, via_whatsapp: 0, via_web: 0, total: 0 };
@@ -164,7 +164,7 @@ export function useMedcareApp() {
       if (filter.value.status) params.set('status', filter.value.status);
       if (filter.value.date) params.set('date', filter.value.date);
 
-      const response = await fetch(`${API_BASE_URL}/appointments?${params}`);
+      const response = await auth.authFetch(`${API_BASE_URL}/appointments?${params}`);
       const data = await response.json();
 
       appointments.value = data.appointments || [];
@@ -174,7 +174,7 @@ export function useMedcareApp() {
   }
 
   async function updateStatus(id, status) {
-    await fetch(`${API_BASE_URL}/appointments/${id}`, {
+    await auth.authFetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -203,7 +203,7 @@ export function useMedcareApp() {
 
     try {
       const doctor = encodeURIComponent(form.value.doctor);
-      const response = await fetch(`${API_BASE_URL}/available-slots?doctor=${doctor}&date=${form.value.date}`);
+      const response = await auth.authFetch(`${API_BASE_URL}/available-slots?doctor=${doctor}&date=${form.value.date}`);
       const data = await response.json();
 
       bookedSlots.value = data.booked || [];
@@ -231,7 +231,7 @@ export function useMedcareApp() {
     schedAlert.value = null;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/appointments`, {
+      const response = await auth.authFetch(`${API_BASE_URL}/appointments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form.value),
@@ -304,7 +304,7 @@ export function useMedcareApp() {
   }
 
   async function resetWaSession() {
-    await fetch(`${API_BASE_URL}/whatsapp/reset/${waPhone.value}`, { method: 'POST' }).catch(() => {});
+    await auth.authFetch(`${API_BASE_URL}/whatsapp/reset/${waPhone.value}`, { method: 'POST' }).catch(() => {});
     waMessages.value = [];
 
     await loadWaSessions();
@@ -312,7 +312,7 @@ export function useMedcareApp() {
 
   async function loadWaSessions() {
     try {
-      const response = await fetch(`${API_BASE_URL}/whatsapp/sessions`);
+      const response = await auth.authFetch(`${API_BASE_URL}/whatsapp/sessions`);
       const data = await response.json();
 
       waSessions.value = Object.values(data.sessions || {});

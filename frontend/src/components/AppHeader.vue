@@ -6,7 +6,7 @@ defineProps({
   },
 });
 
-defineEmits(['change-view']);
+defineEmits(['change-view', 'logout']);
 
 const navItems = [
   { key: 'dashboard', icon: '📊', label: 'Dashboard' },
@@ -37,5 +37,7 @@ const navItems = [
     </nav>
 
     <button class="wa-badge" @click="$emit('change-view', 'whatsapp')">💬 Flow WhatsApp</button>
+
+    <button class="logout-btn" @click="$emit('logout')" title="Sair">Sair</button>
   </header>
 </template>
