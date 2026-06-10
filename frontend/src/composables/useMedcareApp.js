@@ -34,6 +34,7 @@ const STATUS_LABELS = {
  * @param {Array} params.appointments - Lista de agendamentos
  * @returns {Array<object>} Array de objetos { day, dateStr, currentMonth, isToday, hasAppt, key }
  */
+function createCalendarDays({ year, month, today, appointments }) {
   const firstDate = new Date(year, month, 1);
   const lastDate = new Date(year, month + 1, 0);
   const days = [];
