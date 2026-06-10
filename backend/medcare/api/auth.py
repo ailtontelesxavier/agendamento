@@ -1,3 +1,8 @@
+"""Router de autenticação com login por CPF e JWT.
+
+Expõe endpoints de login CPF, registro, gerenciamento de usuários
+e renovação de token JWT via fastapi-users.
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 
@@ -31,6 +36,7 @@ async def cpf_login(
     data: CPFLoginRequest,
     user_manager: UserManager = Depends(get_user_manager),
 ):
+    """Autentica um usuário por CPF + senha e retorna um token JWT."""
     user = await user_manager.authenticate_cpf(data.cpf, data.password)
     if user is None or not user.is_active:
         raise HTTPException(

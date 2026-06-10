@@ -1,3 +1,11 @@
+/**
+ * Composable principal do sistema de agendamento MedCare.
+ *
+ * Gerencia estado do dashboard, calendário, agendamentos, WhatsApp bot,
+ * formulário de agendamento e todas as chamadas à API.
+ *
+ * @module useMedcareApp
+ */
 import { computed, nextTick, onMounted, ref } from 'vue';
 import {
   API_BASE_URL,
@@ -9,6 +17,7 @@ import {
 } from '../constants';
 import { formatCurrentTime, getTodayIsoDate } from '../utils/date';
 
+/** Labels amigáveis para os status de agendamento */
 const STATUS_LABELS = {
   confirmed: 'Confirmado',
   cancelled: 'Cancelado',
@@ -16,7 +25,15 @@ const STATUS_LABELS = {
   pending: 'Pendente',
 };
 
-function createCalendarDays({ year, month, today, appointments }) {
+/**
+ * Gera os 42 dias para exibição no calendário (6 semanas).
+ * @param {object} params
+ * @param {number} params.year - Ano do calendário
+ * @param {number} params.month - Mês (0-11)
+ * @param {string} params.today - Data de hoje em ISO (YYYY-MM-DD)
+ * @param {Array} params.appointments - Lista de agendamentos
+ * @returns {Array<object>} Array de objetos { day, dateStr, currentMonth, isToday, hasAppt, key }
+ */
   const firstDate = new Date(year, month, 1);
   const lastDate = new Date(year, month + 1, 0);
   const days = [];
@@ -66,10 +83,16 @@ function createCalendarDays({ year, month, today, appointments }) {
   return days;
 }
 
+/** Cria uma cópia do formulário padrão de agendamento. */
 function createDefaultForm() {
   return { ...DEFAULT_APPOINTMENT_FORM };
 }
 
+/**
+ * Composable principal do MedCare.
+ * @param {object} auth - Objeto retornado por useAuth() (precisa de authFetch)
+ * @returns {object} Todo o estado e métodos reativos do aplicativo
+ */
 export function useMedcareApp(auth) {
   const view = ref('dashboard');
   const today = getTodayIsoDate();
@@ -148,6 +171,7 @@ export function useMedcareApp(auth) {
     selectedCalDate.value = date;
   }
 
+  /** Carrega estatísticas gerais do backend. */
   async function loadStats() {
     try {
       const response = await auth.authFetch(`${API_BASE_URL}/stats`);
@@ -157,6 +181,7 @@ export function useMedcareApp(auth) {
     }
   }
 
+  /** Carrega agendamentos com filtros aplicados (status, data). */
   async function loadAppointments() {
     try {
       const params = new URLSearchParams();
@@ -173,6 +198,11 @@ export function useMedcareApp(auth) {
     }
   }
 
+  /**
+   * Atualiza o status de um agendamento.
+   * @param {string} id - UUID do agendamento
+   * @param {string} status - Novo status (confirmed, cancelled, completed)
+   */
   async function updateStatus(id, status) {
     await auth.authFetch(`${API_BASE_URL}/appointments/${id}`, {
       method: 'PATCH',
@@ -226,6 +256,7 @@ export function useMedcareApp(auth) {
     schedStep.value = step;
   }
 
+  /** Envia o formulário de agendamento para o backend. */
   async function submitAppointment() {
     submitting.value = true;
     schedAlert.value = null;
@@ -271,6 +302,7 @@ export function useMedcareApp(auth) {
     }
   }
 
+  /** Envia mensagem para o bot WhatsApp e exibe a resposta. */
   async function sendWaMessage() {
     const message = waInput.value.trim();
 

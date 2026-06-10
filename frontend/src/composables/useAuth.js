@@ -1,3 +1,11 @@
+/**
+ * Composable de autenticação JWT para o MedCare.
+ *
+ * Fornece login por CPF + senha, logout, persistência de token no localStorage,
+ * e um wrapper authFetch() que injeta o Bearer token nas requisições.
+ *
+ * @module useAuth
+ */
 import { computed, ref } from 'vue';
 import { API_BASE_URL } from '../constants';
 
@@ -9,8 +17,14 @@ const user = ref(JSON.parse(localStorage.getItem(USER_KEY) || 'null'));
 const loginError = ref('');
 const loginLoading = ref(false);
 
+/** @type {import('vue').ComputedRef<boolean>} True se o usuário está autenticado */
 const isAuthenticated = computed(() => !!token.value);
 
+/**
+ * Salva token e dados do usuário no estado e localStorage.
+ * @param {string} tokenValue - Token JWT
+ * @param {object} userValue - Dados do usuário (ex: { cpf })
+ */
 function setAuth(tokenValue, userValue) {
   token.value = tokenValue;
   user.value = userValue;
@@ -18,6 +32,7 @@ function setAuth(tokenValue, userValue) {
   localStorage.setItem(USER_KEY, JSON.stringify(userValue));
 }
 
+/** Limpa autenticação do estado e localStorage. */
 function clearAuth() {
   token.value = '';
   user.value = null;
@@ -25,6 +40,12 @@ function clearAuth() {
   localStorage.removeItem(USER_KEY);
 }
 
+/**
+ * Autentica um usuário por CPF + senha.
+ * @param {string} cpf - CPF do usuário (11 dígitos)
+ * @param {string} password - Senha do usuário
+ * @returns {Promise<boolean>} True se login foi bem-sucedido
+ */
 async function login(cpf, password) {
   loginLoading.value = true;
   loginError.value = '';
@@ -53,10 +74,20 @@ async function login(cpf, password) {
   }
 }
 
+/** Faz logout limpando a autenticação. */
 function logout() {
   clearAuth();
 }
 
+/**
+ * Wrapper de fetch() que injeta o Bearer token automaticamente.
+ * Se retornar 401, limpa a autenticação e lança erro.
+ *
+ * @param {string} url - URL da requisição
+ * @param {RequestInit} options - Opções do fetch (method, headers, body, etc)
+ * @returns {Promise<Response>} Resposta do fetch
+ * @throws {Error} Se a sessão expirar (status 401)
+ */
 async function authFetch(url, options = {}) {
   const headers = { ...options.headers };
 
@@ -74,6 +105,10 @@ async function authFetch(url, options = {}) {
   return response;
 }
 
+/**
+ * Composable principal de autenticação.
+ * @returns {object} Objeto com token, user, isAuthenticated, login, logout, authFetch
+ */
 export function useAuth() {
   return {
     token,

@@ -1,3 +1,8 @@
+"""Modelos SQLAlchemy para o banco de dados MedCare.
+
+Define as tabelas User e AppointmentDB mapeadas para PostgreSQL.
+O modelo User estende a tabela base do fastapi-users com campo CPF.
+"""
 import uuid
 from datetime import datetime
 
@@ -8,10 +13,17 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
+    """Classe base declarativa para todos os modelos SQLAlchemy."""
     pass
 
 
 class User(SQLAlchemyBaseUserTableUUID, Base):
+    """Modelo de usuário estendido com CPF.
+
+    Herda campos de autenticação do fastapi_users (id, email, hashed_password,
+    is_active, is_superuser, is_verified). Adiciona CPF como campo obrigatório
+    e timestamps de criação/atualização.
+    """
     email: Mapped[str | None] = mapped_column(
         String(length=320), unique=True, index=True, nullable=True
     )
@@ -29,6 +41,11 @@ class User(SQLAlchemyBaseUserTableUUID, Base):
 
 
 class AppointmentDB(Base):
+    """Modelo de agendamento persistido no banco de dados.
+
+    Armazena todos os dados de uma consulta agendada, com vínculo opcional
+    ao usuário que realizou o agendamento.
+    """
     __tablename__ = "appointments"
 
     id: Mapped[uuid.UUID] = mapped_column(

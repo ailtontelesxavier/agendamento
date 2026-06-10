@@ -1,3 +1,8 @@
+"""Casos de uso do sistema de agendamento.
+
+Implementa a lógica de negócio para agendamentos e conversas WhatsApp.
+Todos os métodos de acesso a dados são assíncronos.
+"""
 from datetime import datetime
 import uuid
 
@@ -7,21 +12,32 @@ from medcare.ports import AppointmentRepository, SessionRepository
 
 
 class AppointmentAlreadyBooked(Exception):
+    """Lançado quando o horário escolhido já está ocupado."""
     pass
 
 
 class AppointmentNotFound(Exception):
+    """Lançado quando o agendamento não é encontrado pelo ID."""
     pass
 
 
 class AppointmentUseCases:
+    """Casos de uso para operações de agendamento.
+
+    Fornece métodos para criar, listar, atualizar e cancelar consultas,
+    além de consultar horários disponíveis e estatísticas.
+    """
+
     def __init__(self, appointments: AppointmentRepository) -> None:
+        """Inicializa com um repositório de agendamentos (in_memory ou SQLAlchemy)."""
         self.appointments = appointments
 
     def specialties(self) -> dict:
+        """Retorna a lista de especialidades e seus médicos."""
         return {"specialties": list(SPECIALTIES.keys()), "doctors": SPECIALTIES}
 
     async def booked_slots(self, doctor: str, date: str) -> list[str]:
+        """Retorna os horários já ocupados para um médico em uma data específica."""
         appointments = await self.appointments.list(date=date, doctor=doctor)
         return [
             appointment.time
@@ -30,6 +46,7 @@ class AppointmentUseCases:
         ]
 
     async def available_slots(self, doctor: str, date: str) -> dict:
+        """Retorna horários disponíveis e ocupados para um médico/data."""
         booked = await self.booked_slots(doctor, date)
         return {"slots": [slot for slot in SLOTS if slot not in booked], "booked": booked}
 
@@ -39,6 +56,7 @@ class AppointmentUseCases:
         doctor: str | None = None,
         status: str | None = None,
     ) -> list[Appointment]:
+        """Lista agendamentos com filtros opcionais (data, médico, status)."""
         return await self.appointments.list(date=date, doctor=doctor, status=status)
 
     async def create_appointment(
@@ -52,6 +70,7 @@ class AppointmentUseCases:
         notes: str = "",
         source: AppointmentSource = AppointmentSource.WEB,
     ) -> Appointment:
+        """Cria um novo agendamento. Levanta AppointmentAlreadyBooked se o horário estiver ocupado."""
         booked = await self.booked_slots(doctor, date)
         if time in booked:
             raise AppointmentAlreadyBooked("Horário já ocupado")
@@ -70,6 +89,7 @@ class AppointmentUseCases:
         return await self.appointments.add(appointment)
 
     async def update_status(self, appointment_id: str, status: str) -> Appointment:
+        """Atualiza o status de um agendamento. Levanta AppointmentNotFound se não existir."""
         appointment = await self.appointments.get(appointment_id)
         if not appointment:
             raise AppointmentNotFound("Agendamento não encontrado")
@@ -77,9 +97,11 @@ class AppointmentUseCases:
         return await self.appointments.update(appointment)
 
     async def cancel(self, appointment_id: str) -> None:
+        """Cancela um agendamento pelo ID."""
         await self.update_status(appointment_id, AppointmentStatus.CANCELLED.value)
 
     async def stats(self) -> dict:
+        """Retorna estatísticas gerais: total, confirmados, cancelados, por fonte."""
         appointments = await self.appointments.list()
         return {
             "total": len(appointments),
@@ -92,14 +114,23 @@ class AppointmentUseCases:
 
 
 class WhatsAppUseCases:
+    """Casos de uso para o bot de agendamento via WhatsApp.
+
+    Gerencia conversas guiadas por etapas (step-by-step) para agendar consultas
+    ou listar agendamentos existentes do usuário.
+    """
+
     def __init__(self, appointments: AppointmentUseCases, sessions: SessionRepository) -> None:
+        """Inicializa com casos de uso de agendamento e repositório de sessões."""
         self.appointments = appointments
         self.sessions = sessions
 
     def normalize_phone(self, phone: str) -> str:
+        """Normaliza o telefone removendo caracteres especiais (+, espaço, hífen)."""
         return phone.replace("+", "").replace(" ", "").replace("-", "")
 
     async def handle_message(self, phone: str, message: str) -> dict:
+        """Processa uma mensagem recebida do WhatsApp e retorna a resposta."""
         phone = self.normalize_phone(phone)
         session = await self.sessions.get(phone) or {"step": "start", "phone": phone}
         session = await self.process_message(phone, message, session)
@@ -111,12 +142,15 @@ class WhatsAppUseCases:
         }
 
     async def reset(self, phone: str) -> None:
+        """Reinicia a sessão de conversa de um telefone."""
         await self.sessions.delete(phone)
 
     async def list_sessions(self) -> dict[str, dict]:
+        """Retorna todas as sessões ativas do WhatsApp."""
         return await self.sessions.list()
 
     async def process_message(self, phone: str, message: str, session: dict) -> dict:
+        """Máquina de estados que processa a mensagem e atualiza a sessão."""
         msg = message.strip()
         step = session.get("step", "start")
 
@@ -198,6 +232,7 @@ class WhatsAppUseCases:
         return session
 
     def format_response(self, session: dict) -> str:
+        """Gera a mensagem de resposta com base no estado atual da sessão."""
         step = session.get("step", "start")
 
         if step == "start":

@@ -1,3 +1,8 @@
+"""Gerenciamento de usuários e autenticação JWT com fastapi-users.
+
+Fornece UserManager customizado com autenticação por CPF, configuração JWT
+com Argon2, e dependências FastAPI para injeção de usuário autenticado.
+"""
 import os
 import uuid
 
@@ -19,6 +24,12 @@ argon2_helper = PasswordHelper(pwdlib.PasswordHash((Argon2Hasher(),)))
 
 
 class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
+    """Gerenciador de usuários com suporte a autenticação por CPF.
+
+    Estende o UserManager padrão do fastapi-users com:
+    - get_by_cpf(): busca usuário por CPF
+    - authenticate_cpf(): autentica por CPF + senha (Argon2)
+    """
     reset_password_token_secret = SECRET_KEY
     verification_token_secret = SECRET_KEY
     password_helper = argon2_helper
@@ -52,14 +63,18 @@ class UserManager(UUIDIDMixin, BaseUserManager[User, uuid.UUID]):
 
 
 async def get_user_db(session: AsyncSession = Depends(get_async_session)):
+    """Dependência que fornece o repositório de usuários SQLAlchemy."""
     yield SQLAlchemyUserDatabase(session, User)
 
 
 async def get_user_manager(user_db=Depends(get_user_db)):
+    """Dependência que fornece o UserManager com helper Argon2."""
     yield UserManager(user_db, password_helper=argon2_helper)
 
 
 def get_jwt_strategy() -> JWTStrategy:
+    """Estratégia JWT com expiração de 1 hora (3600s)."""
+    return JWTStrategy(secret=SECRET_KEY, lifetime_seconds=3600)
     return JWTStrategy(secret=SECRET_KEY, lifetime_seconds=3600)
 
 
@@ -69,3 +84,4 @@ auth_backend = AuthenticationBackend(name="jwt", transport=transport, get_strate
 fastapi_users = FastAPIUsers[User, uuid.UUID](get_user_manager, [auth_backend])
 
 current_active_user = fastapi_users.current_user(active=True)
+"""Dependência FastAPI que retorna o usuário autenticado ativo. Levanta 401 se não autenticado."""
