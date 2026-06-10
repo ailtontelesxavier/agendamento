@@ -16,6 +16,10 @@ dependencies = [
 ]
 
 [tool.poetry]
+name = "medcare-agendamento-backend"
+version = "0.1.0"
+description = "Backend FastAPI para agendamento MedCare com arquitetura hexagonal."
+authors = ["MedCare <dev@medcare.local>"]
 packages = [{ include = "medcare" }]
 
 [project.scripts]
